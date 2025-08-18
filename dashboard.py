@@ -7,20 +7,38 @@ import streamlit as st
 warnings.filterwarnings("ignore")
 
 # ===== Load data =====
-df = pd.read_csv("Clean Feedback.csv")  # اسم الملف
-df.columns = df.columns.astype(str).str.replace(r'\n', ' ', regex=True).str.strip()
+df = pd.read_csv("Clean Feedback.csv")
+
+# تعديل أسماء الأعمدة (إزالة العربي والاكتفاء بالإنجليزي)
+df.columns = [
+    "Name",
+    "Phone Number",
+    "Select your assigned group",
+    "How clear was the instructor in delivering the content?",
+    "Was the instructor helpful and responsive to questions?",
+    "Were there enough practical examples and applications?",
+    "Are assignments and tasks being sent regularly?",
+    "Improvement Areas",
+    "Experience Rating",
+    "Techincal / Operation Solved",
+    "Technical / Operation Comment",
+    "Evidence Attachment",
+    "Instructor"
+]
 
 # ===== Column names =====
-status_col = 'Techincal / Operation Solved'
-group_col = 'Select your assigned group | اختر المجموعة المخصصة لك'
-link_col = 'Evidence Attachment'
-rating_col = 'تقيّم تجربتك مع AMIT Learning ?'
+status_col = "Techincal / Operation Solved"
+group_col = "Select your assigned group"
+link_col = "Evidence Attachment"
+rating_col = "Experience Rating"
+clarity_col = "How clear was the instructor in delivering the content?"
 
 # Clean status column
 df[status_col] = df[status_col].str.lower().str.strip()
 
 # Convert rating to numeric
 df[rating_col] = pd.to_numeric(df[rating_col], errors='coerce')
+df[clarity_col] = pd.to_numeric(df[clarity_col], errors='coerce')
 
 # ===== Metrics =====
 total_rows = len(df)
@@ -29,7 +47,7 @@ total_groups = df[group_col].nunique()
 # Poor feedback filter
 poor_ratings = [1, 2, 3]
 poor_feedback_df = df[
-    df[status_col].isin(['solved', 'follow up', 'not solved']) &
+    df[status_col].isin(['solved', 'follow up', 'not solved']) & 
     df[rating_col].isin(poor_ratings)
 ]
 poor_feedback_count = len(poor_feedback_df)
@@ -38,7 +56,6 @@ poor_feedback_count = len(poor_feedback_df)
 solved_poor_count = len(df[(df[status_col] == 'solved') & (df[rating_col].isin(poor_ratings))])
 # Evidence links for poor ratings
 links_poor_count = df[df[rating_col].isin(poor_ratings)][link_col].notna().sum()
-
 
 # Normal counts
 follow_count = (df[status_col] == 'follow up').sum()
@@ -60,8 +77,8 @@ col5.metric("Follow Up", follow_count)
 col6.metric("Not Solved", not_solved_count)
 
 # ===== Tabs =====
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["📌 Main Status", "📍 By Status", "🔗 Links", "⭐ Ratings", "📋 Summary"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ["📌 Main Status", "📍 By Status", "🔗 Links", "⭐ Ratings", "📋 Summary", "👨‍🏫 Instructor Feedback"]
 )
 
 # ====== Tab 1: Main Chart ======
@@ -131,9 +148,41 @@ with tab5:
         "Solved (Poor Ratings)": solved_poor_count,
         "Follow up": follow_count,
         "Not solved": not_solved_count,
-        "Evidince": links_poor_count,
+        "Evidence": links_poor_count,
         "Without Evidence": solved_poor_count - links_poor_count
     }
     st.table(pd.DataFrame(list(summary_table.items()), columns=["Metric", "Value"]))
+
+# ====== Tab 6: Instructor Feedback ======
+with tab6:
+    st.subheader("Average Clarity Rating per Instructor")
+
+    # حساب متوسط الوضوح لكل انستركتور
+    instructor_avg = df.groupby("Instructor")[clarity_col].mean().sort_values(ascending=False)
+
+    fig, ax = plt.subplots(figsize=(12,6))
+    sns.barplot(x=instructor_avg.index, y=instructor_avg.values, palette="coolwarm", ax=ax)
+    ax.set_ylabel("Average Clarity Rating")
+    ax.set_xlabel("Instructor")
+    ax.set_title("Instructor Performance (Avg Clarity)")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=10)
+    st.pyplot(fig)
+
+    st.subheader("Instructor vs Assigned Groups")
+
+    # حساب توزيع الجروبات لكل انستركتور
+    inst_group_counts = df.groupby(["Instructor", group_col]).size().unstack(fill_value=0)
+
+    fig3, ax3 = plt.subplots(figsize=(12,6))
+    inst_group_counts.plot(kind="bar", stacked=True, ax=ax3, colormap="tab20")
+
+    ax3.set_ylabel("Number of Students")
+    ax3.set_xlabel("Instructor")
+    ax3.set_title("Groups per Instructor (Stacked)")
+    ax3.legend(title="Groups", bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax3.tick_params(axis='x', rotation=45)
+    st.pyplot(fig3)
+
+
 
 # python -m streamlit run dashboard.py
